@@ -37,6 +37,7 @@ class IssueTrackingPlugin(Plugin):
     not_configured_template = 'sentry/plugins/bases/issue/not_configured.html'
     needs_auth_template = 'sentry/plugins/bases/issue/needs_auth.html'
     auth_provider = None
+    can_unlink_issues = False
 
     def _get_group_body(self, request, group, event, **kwargs):
         result = []
@@ -99,6 +100,12 @@ class IssueTrackingPlugin(Plugin):
         """
         return 'Create %s Issue' % self.get_title()
 
+    def get_unlink_issue_title(self, **kwargs):
+        """
+        Return a string for the "Unlink plugin issue" action label.
+        """
+        return 'Unlink %s Issue' % self.get_title()
+
     def get_new_issue_form(self, request, group, event, **kwargs):
         """
         Return a Form for the "Create new issue" page.
@@ -138,6 +145,11 @@ class IssueTrackingPlugin(Plugin):
 
         return self.auth_provider in get_auth_providers()
 
+    def handle_unlink_issue(self, request, group, **kwargs):
+        GroupMeta.objects.unset_value(group, '%s:tid' % self.get_conf_key())
+        # TODO: also add an activity record?
+        return self.redirect(group.get_absolute_url())
+
     def view(self, request, group, **kwargs):
         has_auth_configured = self.has_auth_configured()
         if not (has_auth_configured and self.is_configured(project=group.project, request=request)):
@@ -160,6 +172,8 @@ class IssueTrackingPlugin(Plugin):
             })
 
         if GroupMeta.objects.get_value(group, '%s:tid' % self.get_conf_key(), None):
+            if self.can_unlink_issues:
+                return self.handle_unlink_issue(request, group, **kwargs)
             return None
 
         prefix = self.get_conf_key()
@@ -210,6 +224,8 @@ class IssueTrackingPlugin(Plugin):
         prefix = self.get_conf_key()
         if not GroupMeta.objects.get_value(group, '%s:tid' % prefix, None):
             action_list.append((self.get_new_issue_title(), self.get_url(group)))
+        elif self.can_unlink_issues:
+            action_list.append((self.get_unlink_issue_title(), self.get_url(group)))
         return action_list
 
     def tags(self, request, group, tag_list, **kwargs):
