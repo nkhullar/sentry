@@ -80,13 +80,7 @@ class User(BaseModel, AbstractBaseUser):
     def save(self, *args, **kwargs):
         if not self.username:
             self.username = self.email
-        user = super(User, self).save(*args, **kwargs)
-        try:
-            with transaction.atomic():
-                self.emails.create(email=self.email, user=self)
-        except IntegrityError:
-            pass
-        return user
+        return super(User, self).save(*args, **kwargs)
 
     def has_perm(self, perm_name):
         warnings.warn('User.has_perm is deprecated', DeprecationWarning)

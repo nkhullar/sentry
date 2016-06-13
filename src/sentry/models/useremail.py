@@ -10,6 +10,8 @@ from django.utils.translation import ugettext_lazy as _
 
 from sentry.db.models import FlexibleForeignKey, Model, sane_repr
 
+CHARACTERS = u'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+
 
 class UserEmail(Model):
 
@@ -31,8 +33,7 @@ class UserEmail(Model):
 
     def set_hash(self):
         self.date_hash_added = timezone.now()
-        characters = u'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-        self.validation_hash = get_random_string(32, characters)
+        self.validation_hash = get_random_string(32, CHARACTERS)
 
     def hash_is_valid(self):
         return self.validation_hash and self.date_hash_added > timezone.now() - timedelta(hours=48)

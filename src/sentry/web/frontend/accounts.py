@@ -13,7 +13,7 @@ from django.contrib import messages
 from django.contrib.auth import login as login_user, authenticate
 from django.core.context_processors import csrf
 from django.core.urlresolvers import reverse
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.http import HttpResponseRedirect, Http404
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_protect
@@ -166,6 +166,14 @@ def settings(request):
         user = form.save()
         if user.email != old_email:
             UserEmail.objects.get(user=request.user, email=old_email).delete()
+            try:
+                with transaction.atomic():
+                    user_email = UserEmail.objects.create(user=user, email=user.email)
+            except IntegrityError:
+                pass
+            else:
+                user_email.set_hash()
+                user_email.save()
             user.send_confirm_emails()
         messages.add_message(request, messages.SUCCESS, 'Your settings were saved.')
         return HttpResponseRedirect(request.path)
