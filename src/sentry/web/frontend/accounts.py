@@ -21,7 +21,7 @@ from django.utils import timezone
 from sudo.decorators import sudo_required
 
 from sentry.models import (
-    LostPasswordHash, Project, ProjectStatus, UserOption, Authenticator)
+    UserEmail, LostPasswordHash, Project, ProjectStatus, UserOption, Authenticator)
 from sentry.plugins import plugins
 from sentry.web.decorators import login_required, signed_auth_required
 from sentry.web.forms.accounts import (
@@ -122,6 +122,34 @@ def recover_confirm(request, user_id, hash):
     return render_to_response(tpl, context, request)
 
 
+@login_required
+def start_confirm_email(request):
+    has_unverified_emails = request.user.has_unverified_emails()
+    if has_unverified_emails:
+        request.user.send_confirm_emails()
+    return render_to_response('sentry/account/confirm_email/send.html',
+                              {'has_unverified_emails': has_unverified_emails},
+                              request)
+
+
+def confirm_email(request, user_id, hash):
+    try:
+        email = UserEmail.objects.get(user=user_id, validation_hash=hash)
+        if not email.hash_is_valid():
+            raise UserEmail.DoesNotExist
+    except UserEmail.DoesNotExist:
+        if request.user.is_authenticated() and not request.user.has_unverified_emails():
+            tpl = 'sentry/account/confirm_email/success.html'
+        else:
+            tpl = 'sentry/account/confirm_email/failure.html'
+    else:
+        tpl = 'sentry/account/confirm_email/success.html'
+        email.is_verified = True
+        email.validation_hash = ''
+        email.save()
+    return render_to_response(tpl, {}, request)
+
+
 @csrf_protect
 @never_cache
 @login_required
@@ -134,7 +162,11 @@ def settings(request):
         'name': request.user.name,
     })
     if form.is_valid():
-        form.save()
+        old_email = request.user.email
+        user = form.save()
+        if user.email != old_email:
+            UserEmail.objects.get(user=request.user, email=old_email).delete()
+            user.send_confirm_emails()
         messages.add_message(request, messages.SUCCESS, 'Your settings were saved.')
         return HttpResponseRedirect(request.path)
 
